@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [zoom, setZoom] = useState<number>(1);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [flashEnabled, setFlashEnabled] = useState<boolean>(false);
+  const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   const handleOverlayUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,9 +30,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleFlipCamera = useCallback(() => {
+  const handleSwitchCamera = useCallback(() => {
     setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'));
-    setZoom(1); // Reset zoom when flipping camera
+    setZoom(1); // Reset zoom when switching camera
+  }, []);
+
+  const handleFlipImage = useCallback(() => {
+    setIsFlipped(prev => !prev);
   }, []);
 
   const handleCapture = useCallback((imageSrc: string) => {
@@ -97,6 +102,7 @@ const App: React.FC = () => {
       zoom={zoom}
       facingMode={facingMode}
       flashEnabled={flashEnabled}
+      isFlipped={isFlipped}
       setOverlayOpacity={setOverlayOpacity}
       setOverlayZoom={setOverlayZoom}
       setOverlayPosition={setOverlayPosition}
@@ -105,7 +111,8 @@ const App: React.FC = () => {
       setZoom={setZoom}
       setFlashEnabled={setFlashEnabled}
       onCapture={handleCapture}
-      onFlipCamera={handleFlipCamera}
+      onSwitchCamera={handleSwitchCamera}
+      onFlipImage={handleFlipImage}
       onUploadOverlay={handleOverlayUpload}
     />
   );

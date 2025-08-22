@@ -17,6 +17,7 @@ interface CameraViewProps {
   zoom: number;
   facingMode: 'user' | 'environment';
   flashEnabled: boolean;
+  isFlipped: boolean;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayZoom: (zoom: number) => void;
   setOverlayPosition: (position: {x: number, y: number}) => void;
@@ -25,7 +26,8 @@ interface CameraViewProps {
   setZoom: (zoom: number) => void;
   setFlashEnabled: (enabled: boolean) => void;
   onCapture: (imageSrc: string) => void;
-  onFlipCamera: () => void;
+  onSwitchCamera: () => void;
+  onFlipImage: () => void;
   onUploadOverlay: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -37,9 +39,9 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
 
 const CameraView: React.FC<CameraViewProps> = (props) => {
   const {
-    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled,
+    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled, isFlipped,
     setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled,
-    onCapture, onFlipCamera, onUploadOverlay
+    onCapture, onSwitchCamera, onFlipImage, onUploadOverlay
   } = props;
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -99,9 +101,12 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         }
 
         // Check torch (flash) capabilities
+        console.log('Camera capabilities:', capabilities);
         if (capabilities.torch !== undefined) {
+          console.log('Torch supported:', capabilities.torch);
           setTorchSupported(true);
         } else {
+          console.log('Torch not supported');
           setTorchSupported(false);
         }
 
@@ -177,7 +182,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
 
     const context = canvas.getContext('2d');
     if (context) {
-      if (facingMode === 'user') {
+      if (isFlipped) {
         context.translate(drawWidth, 0);
         context.scale(-1, 1);
       }
@@ -185,7 +190,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       onCapture(dataUrl);
     }
-  }, [aspectRatio, onCapture, facingMode]);
+  }, [aspectRatio, onCapture, isFlipped]);
 
   const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
     if (!overlayImage) return;
@@ -306,7 +311,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
           {isLoading && <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-30"><p>Starting Camera...</p></div>}
           {cameraError && <div className="absolute inset-0 bg-red-900 flex items-center justify-center z-30 p-4 text-center"><p>{cameraError}</p></div>}
           
-          <video ref={videoRef} autoPlay playsInline className="absolute top-0 left-0 w-full h-full object-cover" style={{transform: `scale(${facingMode === 'user' ? -1 : 1}, 1)`}} />
+          <video ref={videoRef} autoPlay playsInline className="absolute top-0 left-0 w-full h-full object-cover" style={{transform: `scale(${isFlipped ? -1 : 1}, 1)`}} />
           
           {overlayImage && (
             <img 
@@ -409,15 +414,14 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             <button onClick={() => uploadInputRef.current?.click()} className="p-2 rounded-full bg-gray-800">
               <Icon name="upload" className="w-5 h-5"/>
             </button>
-            {torchSupported && (
-              <button 
-                onClick={() => setFlashEnabled(!flashEnabled)} 
-                className={`p-2 rounded-full transition-colors ${flashEnabled ? 'bg-yellow-500' : 'bg-gray-800'}`}
-                title="Flash"
-              >
-                <Icon name="flash" className="w-5 h-5"/>
-              </button>
-            )}
+            {/* Flash button - show always for testing */}
+            <button 
+              onClick={() => setFlashEnabled(!flashEnabled)} 
+              className={`p-2 rounded-full transition-colors ${flashEnabled ? 'bg-yellow-500' : 'bg-gray-800'} ${!torchSupported ? 'opacity-50' : ''}`}
+              title={torchSupported ? "Flash" : "Flash not supported"}
+            >
+              <Icon name="flash" className="w-5 h-5"/>
+            </button>
           </div>
           <div className="flex items-center gap-2 text-sm">
             {(['3:4', '1:1', '9:16'] as AspectRatio[]).map(ratio => (
@@ -428,15 +432,27 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
           </div>
         </div>
         <div className="flex justify-around items-center pt-2">
-          <div className="w-20 h-20"></div>
+          <div className="flex flex-col items-center gap-2">
+            <button onClick={onSwitchCamera} className="w-16 h-16 flex items-center justify-center" title="Switch Camera">
+              <div className="p-2 rounded-full bg-gray-800 transition-colors active:bg-gray-700">
+               <Icon name="switchCamera" className="w-6 h-6"/>
+              </div>
+            </button>
+            <span className="text-xs text-gray-400">{facingMode === 'user' ? 'Front' : 'Back'}</span>
+          </div>
+          
           <button onClick={handleCapture} className="w-20 h-20 rounded-full bg-white flex items-center justify-center ring-4 ring-gray-600 ring-offset-4 ring-offset-black transition-transform active:scale-95">
             <div className="w-16 h-16 rounded-full bg-white border-4 border-black"></div>
           </button>
-          <button onClick={onFlipCamera} className="w-20 h-20 flex items-center justify-center">
-            <div className="p-3 rounded-full bg-gray-800 transition-colors active:bg-gray-700">
-             <Icon name="flip" className="w-8 h-8"/>
-            </div>
-          </button>
+          
+          <div className="flex flex-col items-center gap-2">
+            <button onClick={onFlipImage} className="w-16 h-16 flex items-center justify-center" title="Flip Image">
+              <div className={`p-2 rounded-full transition-colors ${isFlipped ? 'bg-blue-500' : 'bg-gray-800'} active:bg-gray-700`}>
+               <Icon name="mirror" className="w-6 h-6"/>
+              </div>
+            </button>
+            <span className="text-xs text-gray-400">Mirror</span>
+          </div>
         </div>
       </footer>
     </div>
