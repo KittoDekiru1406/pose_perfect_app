@@ -1,0 +1,18 @@
+{
+  "short_name": "Pose Perfect",
+  "name": "Pose Perfect Camera",
+  "description": "An advanced camera web app that helps you match a pose perfectly. Upload a sample image as a semi-transparent overlay, use a grid, and control aspect ratio, zoom, and camera direction to capture the ideal shot. After capturing, you can preview, save, and share your photos.",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "scope": "./"
+}

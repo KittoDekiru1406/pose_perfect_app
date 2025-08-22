@@ -1,0 +1,7 @@
+{
+  "name": "Pose Perfect Camera",
+  "description": "An advanced camera web app that helps you match a pose perfectly. Upload a sample image as a semi-transparent overlay, use a grid, and control aspect ratio, zoom, and camera direction to capture the ideal shot. After capturing, you can preview, save, and share your photos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
