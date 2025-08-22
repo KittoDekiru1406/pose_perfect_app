@@ -18,6 +18,8 @@ interface CameraViewProps {
   facingMode: 'user' | 'environment';
   flashEnabled: boolean;
   isFlipped: boolean;
+  portraitMode: boolean;
+  timerSeconds: number;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayZoom: (zoom: number) => void;
   setOverlayPosition: (position: {x: number, y: number}) => void;
@@ -25,6 +27,8 @@ interface CameraViewProps {
   setAspectRatio: (ratio: AspectRatio) => void;
   setZoom: (zoom: number) => void;
   setFlashEnabled: (enabled: boolean) => void;
+  setPortraitMode: (enabled: boolean) => void;
+  setTimerSeconds: (seconds: number) => void;
   onCapture: (imageSrc: string) => void;
   onSwitchCamera: () => void;
   onFlipImage: () => void;
@@ -39,8 +43,8 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
 
 const CameraView: React.FC<CameraViewProps> = (props) => {
   const {
-    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled, isFlipped,
-    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled,
+    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled, isFlipped, portraitMode, timerSeconds,
+    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled, setPortraitMode, setTimerSeconds,
     onCapture, onSwitchCamera, onFlipImage, onUploadOverlay
   } = props;
 
@@ -57,6 +61,8 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const [dragStart, setDragStart] = useState<{x: number, y: number}>({x: 0, y: 0});
   const [lastTouchDistance, setLastTouchDistance] = useState<number>(0);
   const [isZooming, setIsZooming] = useState(false);
+  const [countdownActive, setCountdownActive] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number>(0);
 
   useEffect(() => {
     let currentStream: MediaStream;
@@ -186,11 +192,32 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         context.translate(drawWidth, 0);
         context.scale(-1, 1);
       }
+      
+      // Apply portrait mode effects to captured image
+      if (portraitMode) {
+        context.filter = 'contrast(1.1) saturate(1.2)';
+      }
+      
       context.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+      
+      // Add portrait mode vignette effect
+      if (portraitMode) {
+        const gradient = context.createRadialGradient(
+          drawWidth / 2, drawHeight / 2, Math.min(drawWidth, drawHeight) * 0.3,
+          drawWidth / 2, drawHeight / 2, Math.min(drawWidth, drawHeight) * 0.7
+        );
+        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
+        context.globalCompositeOperation = 'multiply';
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, drawWidth, drawHeight);
+        context.globalCompositeOperation = 'source-over';
+      }
+      
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       onCapture(dataUrl);
     }
-  }, [aspectRatio, onCapture, isFlipped]);
+  }, [aspectRatio, onCapture, isFlipped, portraitMode]);
 
   const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
     if (!overlayImage) return;
@@ -292,6 +319,41 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
     setOverlayPosition({x: 0, y: 0});
   }, [setOverlayZoom, setOverlayPosition]);
 
+  const startCountdown = useCallback(() => {
+    if (timerSeconds === 0) {
+      handleCapture();
+      return;
+    }
+    
+    setCountdownActive(true);
+    setCountdown(timerSeconds);
+    
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCountdownActive(false);
+          // Small delay to show "0" before capture
+          setTimeout(() => handleCapture(), 100);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [timerSeconds, handleCapture]);
+
+  const cancelCountdown = useCallback(() => {
+    setCountdownActive(false);
+    setCountdown(0);
+  }, []);
+
+  const cycleTimer = useCallback(() => {
+    const timerOptions = [0, 3, 5, 10];
+    const currentIndex = timerOptions.indexOf(timerSeconds);
+    const nextIndex = (currentIndex + 1) % timerOptions.length;
+    setTimerSeconds(timerOptions[nextIndex]);
+  }, [timerSeconds, setTimerSeconds]);
+
   const handleOverlayWheel = useCallback((e: React.WheelEvent) => {
     if (!overlayImage) return;
     e.preventDefault();
@@ -302,16 +364,72 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   }, [overlayImage, overlayZoom, setOverlayZoom]);
   
   return (
-    <div className="w-screen h-screen bg-black text-white flex flex-col overflow-hidden">
-      <main className="flex-grow flex items-center justify-center relative p-2 min-h-0">
-        <div className={`w-full h-full max-w-lg relative ${ASPECT_RATIO_CLASSES[aspectRatio]} overflow-hidden rounded-lg shadow-2xl flex-shrink-0`}
+    <div className="w-screen h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900 text-white flex flex-col overflow-hidden">
+      <main className="flex-grow flex items-center justify-center relative min-h-0">
+        <div className={`w-full h-full max-w-lg relative ${ASPECT_RATIO_CLASSES[aspectRatio]} overflow-hidden rounded-2xl shadow-2xl border border-blue-300/30 backdrop-blur-sm bg-gradient-to-b from-blue-950/50 to-slate-900/50 flex-shrink-0`}
              style={{
-               maxHeight: aspectRatio === '9:16' ? 'calc(100vh - 200px)' : 'calc(100vh - 150px)'
+               maxHeight: aspectRatio === '9:16' ? 'calc(100vh - 120px)' : 
+                         aspectRatio === '1:1' ? 'calc(100vh - 140px)' : 
+                         'calc(100vh - 160px)',
+               maxWidth: aspectRatio === '9:16' ? 'calc((100vh - 120px) * 9 / 16)' :
+                        aspectRatio === '1:1' ? 'calc(100vh - 140px)' :
+                        'calc((100vh - 160px) * 3 / 4)'
              }}>
           {isLoading && <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-30"><p>Starting Camera...</p></div>}
           {cameraError && <div className="absolute inset-0 bg-red-900 flex items-center justify-center z-30 p-4 text-center"><p>{cameraError}</p></div>}
           
-          <video ref={videoRef} autoPlay playsInline className="absolute top-0 left-0 w-full h-full object-cover" style={{transform: `scale(${isFlipped ? -1 : 1}, 1)`}} />
+          {/* Portrait mode indicator */}
+          {portraitMode && (
+            <div className="absolute top-4 left-4 z-20 bg-purple-600 px-3 py-1 rounded-full">
+              <span className="text-xs font-medium text-white">PORTRAIT</span>
+            </div>
+          )}
+
+          {/* Timer indicator */}
+          {timerSeconds > 0 && !countdownActive && (
+            <div className="absolute top-4 right-4 z-20 bg-orange-600 px-3 py-1 rounded-full">
+              <span className="text-xs font-medium text-white">{timerSeconds}S</span>
+            </div>
+          )}
+
+          {/* Countdown display */}
+          {countdownActive && (
+            <div className="absolute inset-0 flex items-center justify-center z-25 bg-black bg-opacity-50">
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-8xl font-bold text-white animate-pulse">
+                  {countdown}
+                </div>
+                <button 
+                  onClick={cancelCountdown}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            className="absolute top-0 left-0 w-full h-full object-cover" 
+            style={{
+              transform: `scale(${isFlipped ? -1 : 1}, 1)`,
+              filter: portraitMode ? 'blur(0px) contrast(1.1) saturate(1.2)' : 'none'
+            }} 
+          />
+          
+          {/* Portrait mode overlay effect */}
+          {portraitMode && (
+            <div 
+              className="absolute inset-0 pointer-events-none z-5"
+              style={{
+                background: `radial-gradient(ellipse 40% 60% at center, transparent 30%, rgba(0,0,0,0.3) 70%)`,
+                mixBlendMode: 'multiply'
+              }}
+            />
+          )}
           
           {overlayImage && (
             <img 
@@ -342,57 +460,45 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         <canvas ref={canvasRef} className="hidden" />
       </main>
 
-      <footer className={`w-full bg-black bg-opacity-30 ${aspectRatio === '9:16' ? 'p-2 space-y-2' : 'p-4 space-y-4'}`}>
+      <footer className="w-full bg-gradient-to-t from-slate-900/95 via-blue-900/90 to-indigo-900/85 backdrop-blur-md border-t border-blue-300/20 p-3 space-y-2 shadow-lg shadow-blue-500/10">
+        {/* Overlay Controls - Elegant */}
         {overlayImage && (
-          <div className={aspectRatio === '9:16' ? 'space-y-2' : 'space-y-3'}>
-            <div className="text-center">
-              <span className={`${aspectRatio === '9:16' ? 'text-xs' : 'text-sm'} font-medium text-white`}>Overlay Controls</span>
-              <p className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} text-gray-300 mt-1`}>
-                💡 Drag to move • Scroll wheel or pinch to zoom
-              </p>
-            </div>
-            <div className={`grid grid-cols-1 ${aspectRatio === '9:16' ? 'gap-2' : 'gap-3'}`}>
-              <div className="flex items-center gap-2">
-                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-12`}>Opacity</span>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.05" 
-                  value={overlayOpacity} 
-                  onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} 
-                  className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
-                />
-                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-8 text-right`}>{Math.round(overlayOpacity * 100)}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-12`}>Zoom</span>
-                <input 
-                  type="range" 
-                  min="0.5" 
-                  max="3" 
-                  step="0.1" 
-                  value={overlayZoom} 
-                  onChange={(e) => setOverlayZoom(parseFloat(e.target.value))} 
-                  className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
-                />
-                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-8 text-right`}>{overlayZoom.toFixed(1)}x</span>
-              </div>
-              <div className="flex justify-center">
-                <button 
-                  onClick={resetOverlayTransform}
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-xs transition-colors"
-                >
-                  Reset Position & Zoom
-                </button>
-              </div>
+          <div className="space-y-2 bg-blue-950/30 rounded-xl p-2 border border-blue-400/20">
+            <div className="flex items-center gap-3 text-sm">
+              <span className="w-12 text-blue-200 text-xs font-medium">Pose</span>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.05" 
+                value={overlayOpacity} 
+                onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} 
+                className="flex-1 h-2 bg-gradient-to-r from-blue-800 to-indigo-700 rounded-full appearance-none cursor-pointer accent-blue-400" 
+              />
+              <span className="w-8 text-xs text-blue-200 text-right font-medium">{Math.round(overlayOpacity * 100)}%</span>
+              <input 
+                type="range" 
+                min="0.5" 
+                max="3" 
+                step="0.1" 
+                value={overlayZoom} 
+                onChange={(e) => setOverlayZoom(parseFloat(e.target.value))} 
+                className="w-20 h-2 bg-gradient-to-r from-blue-800 to-indigo-700 rounded-full appearance-none cursor-pointer accent-blue-400" 
+              />
+              <button 
+                onClick={resetOverlayTransform}
+                className="px-2 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-lg text-[10px] font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                Reset
+              </button>
             </div>
           </div>
         )}
         
+        {/* Camera Zoom - Elegant */}
         {zoomCaps && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs w-16">Camera</span>
+          <div className="flex items-center gap-3 text-sm bg-blue-950/30 rounded-xl p-2 border border-blue-400/20">
+            <span className="w-12 text-blue-200 text-xs font-medium">Zoom</span>
             <input 
               type="range" 
               min={zoomCaps.min} 
@@ -400,58 +506,85 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
               step={zoomCaps.step} 
               value={zoom} 
               onChange={(e) => setZoom(parseFloat(e.target.value))} 
-              className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
+              className="flex-1 h-2 bg-gradient-to-r from-blue-800 to-indigo-700 rounded-full appearance-none cursor-pointer accent-blue-400" 
             />
-            <span className="text-xs w-10 text-right">{zoom.toFixed(1)}x</span>
+            <span className="w-8 text-xs text-blue-200 text-right font-medium">{zoom.toFixed(1)}x</span>
           </div>
         )}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowGrid(!showGrid)} className={`p-2 rounded-full transition-colors ${showGrid ? 'bg-blue-500' : 'bg-gray-800'}`}>
-              <Icon name="grid" className="w-5 h-5"/>
+        
+        {/* Main Control Buttons - Elegant Row */}
+        <div className="flex justify-between items-center py-2 bg-blue-950/40 rounded-xl border border-blue-400/30 shadow-lg">
+          <div className="flex items-center gap-2 px-3">
+            <button onClick={() => setShowGrid(!showGrid)} className={`p-2 rounded-xl transition-all duration-300 shadow-md ${showGrid ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow-blue-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-blue-600 hover:to-indigo-600'}`}>
+              <Icon name="grid" className="w-4 h-4"/>
             </button>
             <input type="file" accept="image/*" ref={uploadInputRef} onChange={onUploadOverlay} className="hidden" />
-            <button onClick={() => uploadInputRef.current?.click()} className="p-2 rounded-full bg-gray-800">
-              <Icon name="upload" className="w-5 h-5"/>
+            <button onClick={() => uploadInputRef.current?.click()} className="p-2 rounded-xl bg-gradient-to-r from-slate-700 to-slate-600 hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-md">
+              <Icon name="upload" className="w-4 h-4"/>
             </button>
-            {/* Flash button - show always for testing */}
             <button 
               onClick={() => setFlashEnabled(!flashEnabled)} 
-              className={`p-2 rounded-full transition-colors ${flashEnabled ? 'bg-yellow-500' : 'bg-gray-800'} ${!torchSupported ? 'opacity-50' : ''}`}
+              className={`p-2 rounded-xl transition-all duration-300 shadow-md ${flashEnabled ? 'bg-gradient-to-r from-amber-500 to-yellow-500 shadow-yellow-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-amber-600 hover:to-yellow-600'} ${!torchSupported ? 'opacity-50' : ''}`}
               title={torchSupported ? "Flash" : "Flash not supported"}
             >
-              <Icon name="flash" className="w-5 h-5"/>
+              <Icon name="flash" className="w-4 h-4"/>
+            </button>
+            <button 
+              onClick={() => setPortraitMode(!portraitMode)} 
+              className={`p-2 rounded-xl transition-all duration-300 shadow-md ${portraitMode ? 'bg-gradient-to-r from-purple-500 to-violet-500 shadow-purple-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-purple-600 hover:to-violet-600'}`}
+              title="Portrait Mode"
+            >
+              <Icon name="portrait" className="w-4 h-4"/>
+            </button>
+            <button 
+              onClick={cycleTimer} 
+              className={`p-2 rounded-xl transition-all duration-300 shadow-md ${timerSeconds > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-orange-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-orange-600 hover:to-red-600'}`}
+              title={`Timer: ${timerSeconds === 0 ? 'Off' : `${timerSeconds}s`}`}
+            >
+              <Icon name="timer" className="w-4 h-4"/>
             </button>
           </div>
-          <div className="flex items-center gap-2 text-sm">
+          
+          {/* Aspect Ratio - Elegant */}
+          <div className="flex items-center gap-1 text-xs px-3">
             {(['3:4', '1:1', '9:16'] as AspectRatio[]).map(ratio => (
-              <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`px-3 py-1 rounded-md transition-colors ${aspectRatio === ratio ? 'bg-blue-500 font-semibold' : 'bg-gray-800'}`}>
+              <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 shadow-sm ${aspectRatio === ratio ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 text-blue-200 hover:from-blue-600 hover:to-indigo-600'}`}>
                 {ratio}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex justify-around items-center pt-2">
-          <div className="flex flex-col items-center gap-2">
-            <button onClick={onSwitchCamera} className="w-16 h-16 flex items-center justify-center" title="Switch Camera">
-              <div className="p-2 rounded-full bg-gray-800 transition-colors active:bg-gray-700">
-               <Icon name="switchCamera" className="w-6 h-6"/>
+        
+        {/* Capture Controls - Elegant */}
+        <div className="flex justify-around items-center py-3 bg-gradient-to-r from-blue-950/50 via-indigo-950/60 to-blue-950/50 rounded-xl border border-blue-300/20 shadow-xl">
+          <div className="flex flex-col items-center">
+            <button onClick={onSwitchCamera} className="w-14 h-14 flex items-center justify-center group" title="Switch Camera">
+              <div className="p-2.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-600 group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-300 shadow-lg group-active:scale-95">
+               <Icon name="switchCamera" className="w-5 h-5"/>
               </div>
             </button>
-            <span className="text-xs text-gray-400">{facingMode === 'user' ? 'Front' : 'Back'}</span>
+            <span className="text-xs text-blue-200 mt-1 font-medium">{facingMode === 'user' ? 'Front' : 'Back'}</span>
           </div>
           
-          <button onClick={handleCapture} className="w-20 h-20 rounded-full bg-white flex items-center justify-center ring-4 ring-gray-600 ring-offset-4 ring-offset-black transition-transform active:scale-95">
-            <div className="w-16 h-16 rounded-full bg-white border-4 border-black"></div>
+          <button 
+            onClick={startCountdown} 
+            disabled={countdownActive}
+            className={`w-18 h-18 rounded-full bg-gradient-to-br from-white via-blue-50 to-white flex items-center justify-center ring-4 ring-blue-400/60 ring-offset-4 ring-offset-transparent transition-all duration-300 shadow-2xl ${countdownActive ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 active:scale-95 hover:ring-blue-300/80'}`}
+          >
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-white to-blue-50 border-3 border-blue-400/60 flex items-center justify-center shadow-inner">
+              {timerSeconds > 0 && !countdownActive && (
+                <span className="text-xs font-bold text-blue-800">{timerSeconds}s</span>
+              )}
+            </div>
           </button>
           
-          <div className="flex flex-col items-center gap-2">
-            <button onClick={onFlipImage} className="w-16 h-16 flex items-center justify-center" title="Flip Image">
-              <div className={`p-2 rounded-full transition-colors ${isFlipped ? 'bg-blue-500' : 'bg-gray-800'} active:bg-gray-700`}>
-               <Icon name="mirror" className="w-6 h-6"/>
+          <div className="flex flex-col items-center">
+            <button onClick={onFlipImage} className="w-14 h-14 flex items-center justify-center group" title="Flip Image">
+              <div className={`p-2.5 rounded-xl transition-all duration-300 shadow-lg group-active:scale-95 ${isFlipped ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow-blue-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 group-hover:from-blue-600 group-hover:to-indigo-600'}`}>
+               <Icon name="mirror" className="w-5 h-5"/>
               </div>
             </button>
-            <span className="text-xs text-gray-400">Mirror</span>
+            <span className="text-xs text-blue-200 mt-1 font-medium">Mirror</span>
           </div>
         </div>
       </footer>

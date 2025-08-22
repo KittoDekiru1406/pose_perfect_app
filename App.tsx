@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { AspectRatio } from './types';
 import CameraView from './components/CameraView';
 import PreviewModal from './components/PreviewModal';
+import HydrangeaBackground from './components/HydrangeaBackground';
 
 const App: React.FC = () => {
   const [overlayImage, setOverlayImage] = useState<string | null>(null);
@@ -14,6 +15,8 @@ const App: React.FC = () => {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [flashEnabled, setFlashEnabled] = useState<boolean>(false);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
+  const [portraitMode, setPortraitMode] = useState<boolean>(false);
+  const [timerSeconds, setTimerSeconds] = useState<number>(0); // 0 = off, 3, 5, 10
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   const handleOverlayUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,39 +85,49 @@ const App: React.FC = () => {
 
   if (capturedImage) {
     return (
-      <PreviewModal 
-        image={capturedImage}
-        onClose={handleRetake}
-        onSave={handleSave}
-        onShare={handleShare}
-      />
+      <>
+        <HydrangeaBackground />
+        <PreviewModal 
+          image={capturedImage}
+          onClose={handleRetake}
+          onSave={handleSave}
+          onShare={handleShare}
+        />
+      </>
     );
   }
 
   return (
-    <CameraView
-      overlayImage={overlayImage}
-      overlayOpacity={overlayOpacity}
-      overlayZoom={overlayZoom}
-      overlayPosition={overlayPosition}
-      showGrid={showGrid}
-      aspectRatio={aspectRatio}
-      zoom={zoom}
-      facingMode={facingMode}
-      flashEnabled={flashEnabled}
-      isFlipped={isFlipped}
-      setOverlayOpacity={setOverlayOpacity}
-      setOverlayZoom={setOverlayZoom}
-      setOverlayPosition={setOverlayPosition}
-      setShowGrid={setShowGrid}
-      setAspectRatio={setAspectRatio}
-      setZoom={setZoom}
-      setFlashEnabled={setFlashEnabled}
-      onCapture={handleCapture}
-      onSwitchCamera={handleSwitchCamera}
-      onFlipImage={handleFlipImage}
-      onUploadOverlay={handleOverlayUpload}
-    />
+    <>
+      <HydrangeaBackground />
+      <CameraView
+        overlayImage={overlayImage}
+        overlayOpacity={overlayOpacity}
+        overlayZoom={overlayZoom}
+        overlayPosition={overlayPosition}
+        showGrid={showGrid}
+        aspectRatio={aspectRatio}
+        zoom={zoom}
+        facingMode={facingMode}
+        flashEnabled={flashEnabled}
+        isFlipped={isFlipped}
+        portraitMode={portraitMode}
+        timerSeconds={timerSeconds}
+        setOverlayOpacity={setOverlayOpacity}
+        setOverlayZoom={setOverlayZoom}
+        setOverlayPosition={setOverlayPosition}
+        setShowGrid={setShowGrid}
+        setAspectRatio={setAspectRatio}
+        setZoom={setZoom}
+        setFlashEnabled={setFlashEnabled}
+        setPortraitMode={setPortraitMode}
+        setTimerSeconds={setTimerSeconds}
+        onCapture={handleCapture}
+        onSwitchCamera={handleSwitchCamera}
+        onFlipImage={handleFlipImage}
+        onUploadOverlay={handleOverlayUpload}
+      />
+    </>
   );
 };
 
