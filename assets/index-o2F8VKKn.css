@@ -1,0 +1,1 @@
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Inter,sans-serif;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;background-color:#000;color:#fff}#root{width:100%;height:100vh;overflow:hidden}video,canvas{object-fit:cover}@media (display-mode: standalone){body{-webkit-user-select:none;-webkit-touch-callout:none;user-select:none}}
