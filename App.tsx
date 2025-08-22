@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
   const [zoom, setZoom] = useState<number>(1);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [flashEnabled, setFlashEnabled] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   const handleOverlayUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,12 +96,14 @@ const App: React.FC = () => {
       aspectRatio={aspectRatio}
       zoom={zoom}
       facingMode={facingMode}
+      flashEnabled={flashEnabled}
       setOverlayOpacity={setOverlayOpacity}
       setOverlayZoom={setOverlayZoom}
       setOverlayPosition={setOverlayPosition}
       setShowGrid={setShowGrid}
       setAspectRatio={setAspectRatio}
       setZoom={setZoom}
+      setFlashEnabled={setFlashEnabled}
       onCapture={handleCapture}
       onFlipCamera={handleFlipCamera}
       onUploadOverlay={handleOverlayUpload}

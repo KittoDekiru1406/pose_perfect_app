@@ -16,12 +16,14 @@ interface CameraViewProps {
   aspectRatio: AspectRatio;
   zoom: number;
   facingMode: 'user' | 'environment';
+  flashEnabled: boolean;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayZoom: (zoom: number) => void;
   setOverlayPosition: (position: {x: number, y: number}) => void;
   setShowGrid: (show: boolean) => void;
   setAspectRatio: (ratio: AspectRatio) => void;
   setZoom: (zoom: number) => void;
+  setFlashEnabled: (enabled: boolean) => void;
   onCapture: (imageSrc: string) => void;
   onFlipCamera: () => void;
   onUploadOverlay: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -35,8 +37,8 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
 
 const CameraView: React.FC<CameraViewProps> = (props) => {
   const {
-    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode,
-    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom,
+    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled,
+    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled,
     onCapture, onFlipCamera, onUploadOverlay
   } = props;
 
@@ -48,6 +50,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const [isLoading, setIsLoading] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoomCaps, setZoomCaps] = useState<{min: number, max: number, step: number} | null>(null);
+  const [torchSupported, setTorchSupported] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{x: number, y: number}>({x: 0, y: 0});
   const [lastTouchDistance, setLastTouchDistance] = useState<number>(0);
@@ -80,8 +83,10 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         }
 
         const videoTrack = currentStream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities() as ZoomableMediaTrackCapabilities;
+        
+        // Check zoom capabilities
         if ('zoom' in (videoTrack.getSettings() as ZoomableMediaTrackSettings)) {
-            const capabilities = videoTrack.getCapabilities() as ZoomableMediaTrackCapabilities;
             if (capabilities.zoom) {
                 setZoomCaps({
                     min: capabilities.zoom.min,
@@ -91,6 +96,13 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             }
         } else {
           setZoomCaps(null);
+        }
+
+        // Check torch (flash) capabilities
+        if (capabilities.torch !== undefined) {
+          setTorchSupported(true);
+        } else {
+          setTorchSupported(false);
         }
 
       } catch (err) {
@@ -121,6 +133,19 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
           videoTrack.applyConstraints(constraints);
       }
   }, [zoom, stream, zoomCaps]);
+
+  useEffect(() => {
+      if (!stream || !torchSupported) return;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+          const constraints: MediaTrackConstraints = {
+            advanced: [{ torch: flashEnabled } as ZoomableMediaTrackConstraintSet]
+          };
+          videoTrack.applyConstraints(constraints).catch(err => {
+            console.warn('Could not apply torch constraint:', err);
+          });
+      }
+  }, [flashEnabled, stream, torchSupported]);
 
   const handleCapture = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -384,6 +409,15 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             <button onClick={() => uploadInputRef.current?.click()} className="p-2 rounded-full bg-gray-800">
               <Icon name="upload" className="w-5 h-5"/>
             </button>
+            {torchSupported && (
+              <button 
+                onClick={() => setFlashEnabled(!flashEnabled)} 
+                className={`p-2 rounded-full transition-colors ${flashEnabled ? 'bg-yellow-500' : 'bg-gray-800'}`}
+                title="Flash"
+              >
+                <Icon name="flash" className="w-5 h-5"/>
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2 text-sm">
             {(['3:4', '1:1', '9:16'] as AspectRatio[]).map(ratio => (
