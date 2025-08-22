@@ -175,11 +175,13 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const handleOverlayTouchStart = useCallback((e: React.TouchEvent) => {
     if (!overlayImage) return;
     e.preventDefault();
+    e.stopPropagation();
     
     if (e.touches.length === 1) {
       // Single touch - start dragging
       const touch = e.touches[0];
       setIsDragging(true);
+      setIsZooming(false);
       setDragStart({
         x: touch.clientX - overlayPosition.x,
         y: touch.clientY - overlayPosition.y
@@ -211,8 +213,9 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!overlayImage) return;
     
-    if (e.touches.length === 1 && isDragging) {
+    if (e.touches.length === 1 && isDragging && !isZooming) {
       // Single touch - dragging
+      e.preventDefault();
       const touch = e.touches[0];
       handleOverlayMove(touch.clientX, touch.clientY);
     } else if (e.touches.length === 2 && isZooming) {
@@ -270,8 +273,11 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col overflow-hidden">
-      <main className="flex-grow flex items-center justify-center relative p-4">
-        <div className={`w-full max-w-lg max-h-full relative ${ASPECT_RATIO_CLASSES[aspectRatio]} overflow-hidden rounded-lg shadow-2xl`}>
+      <main className="flex-grow flex items-center justify-center relative p-2 min-h-0">
+        <div className={`w-full h-full max-w-lg relative ${ASPECT_RATIO_CLASSES[aspectRatio]} overflow-hidden rounded-lg shadow-2xl flex-shrink-0`}
+             style={{
+               maxHeight: aspectRatio === '9:16' ? 'calc(100vh - 200px)' : 'calc(100vh - 150px)'
+             }}>
           {isLoading && <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-30"><p>Starting Camera...</p></div>}
           {cameraError && <div className="absolute inset-0 bg-red-900 flex items-center justify-center z-30 p-4 text-center"><p>{cameraError}</p></div>}
           
@@ -281,11 +287,12 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             <img 
               src={overlayImage} 
               alt="Pose overlay" 
-              className="absolute top-0 left-0 w-full h-full object-contain cursor-move z-10 transition-opacity select-none" 
+              className="absolute top-0 left-0 w-full h-full object-contain cursor-move z-10 transition-opacity select-none touch-none" 
               style={{ 
                 opacity: overlayOpacity,
                 transform: `translate(${overlayPosition.x}px, ${overlayPosition.y}px) scale(${overlayZoom})`,
-                transformOrigin: 'center center'
+                transformOrigin: 'center center',
+                touchAction: 'none'
               }}
               onMouseDown={handleOverlayMouseDown}
               onTouchStart={handleOverlayTouchStart}
@@ -305,18 +312,18 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         <canvas ref={canvasRef} className="hidden" />
       </main>
 
-      <footer className="w-full bg-black bg-opacity-30 p-4 space-y-4">
+      <footer className={`w-full bg-black bg-opacity-30 ${aspectRatio === '9:16' ? 'p-2 space-y-2' : 'p-4 space-y-4'}`}>
         {overlayImage && (
-          <div className="space-y-3">
+          <div className={aspectRatio === '9:16' ? 'space-y-2' : 'space-y-3'}>
             <div className="text-center">
-              <span className="text-sm font-medium text-white">Overlay Controls</span>
-              <p className="text-xs text-gray-300 mt-1">
+              <span className={`${aspectRatio === '9:16' ? 'text-xs' : 'text-sm'} font-medium text-white`}>Overlay Controls</span>
+              <p className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} text-gray-300 mt-1`}>
                 💡 Drag to move • Scroll wheel or pinch to zoom
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            <div className={`grid grid-cols-1 ${aspectRatio === '9:16' ? 'gap-2' : 'gap-3'}`}>
               <div className="flex items-center gap-2">
-                <span className="text-xs w-16">Opacity</span>
+                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-12`}>Opacity</span>
                 <input 
                   type="range" 
                   min="0" 
@@ -326,10 +333,10 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
                   onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} 
                   className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
                 />
-                <span className="text-xs w-10 text-right">{Math.round(overlayOpacity * 100)}%</span>
+                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-8 text-right`}>{Math.round(overlayOpacity * 100)}%</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs w-16">Zoom</span>
+                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-12`}>Zoom</span>
                 <input 
                   type="range" 
                   min="0.5" 
@@ -339,7 +346,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
                   onChange={(e) => setOverlayZoom(parseFloat(e.target.value))} 
                   className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
                 />
-                <span className="text-xs w-10 text-right">{overlayZoom.toFixed(1)}x</span>
+                <span className={`${aspectRatio === '9:16' ? 'text-[10px]' : 'text-xs'} w-8 text-right`}>{overlayZoom.toFixed(1)}x</span>
               </div>
               <div className="flex justify-center">
                 <button 
