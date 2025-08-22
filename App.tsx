@@ -15,7 +15,6 @@ const App: React.FC = () => {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [flashEnabled, setFlashEnabled] = useState<boolean>(false);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
-  const [portraitMode, setPortraitMode] = useState<boolean>(false);
   const [timerSeconds, setTimerSeconds] = useState<number>(0); // 0 = off, 3, 5, 10
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
@@ -34,12 +33,13 @@ const App: React.FC = () => {
   }, []);
 
   const handleSwitchCamera = useCallback(() => {
-    setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'));
+    setFacingMode(prev => {
+      const newMode = prev === 'user' ? 'environment' : 'user';
+      // Auto-enable mirror for front camera, disable for back camera
+      setIsFlipped(newMode === 'user');
+      return newMode;
+    });
     setZoom(1); // Reset zoom when switching camera
-  }, []);
-
-  const handleFlipImage = useCallback(() => {
-    setIsFlipped(prev => !prev);
   }, []);
 
   const handleCapture = useCallback((imageSrc: string) => {
@@ -111,7 +111,6 @@ const App: React.FC = () => {
         facingMode={facingMode}
         flashEnabled={flashEnabled}
         isFlipped={isFlipped}
-        portraitMode={portraitMode}
         timerSeconds={timerSeconds}
         setOverlayOpacity={setOverlayOpacity}
         setOverlayZoom={setOverlayZoom}
@@ -120,11 +119,9 @@ const App: React.FC = () => {
         setAspectRatio={setAspectRatio}
         setZoom={setZoom}
         setFlashEnabled={setFlashEnabled}
-        setPortraitMode={setPortraitMode}
         setTimerSeconds={setTimerSeconds}
         onCapture={handleCapture}
         onSwitchCamera={handleSwitchCamera}
-        onFlipImage={handleFlipImage}
         onUploadOverlay={handleOverlayUpload}
       />
     </>

@@ -18,7 +18,6 @@ interface CameraViewProps {
   facingMode: 'user' | 'environment';
   flashEnabled: boolean;
   isFlipped: boolean;
-  portraitMode: boolean;
   timerSeconds: number;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayZoom: (zoom: number) => void;
@@ -27,11 +26,9 @@ interface CameraViewProps {
   setAspectRatio: (ratio: AspectRatio) => void;
   setZoom: (zoom: number) => void;
   setFlashEnabled: (enabled: boolean) => void;
-  setPortraitMode: (enabled: boolean) => void;
   setTimerSeconds: (seconds: number) => void;
   onCapture: (imageSrc: string) => void;
   onSwitchCamera: () => void;
-  onFlipImage: () => void;
   onUploadOverlay: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -43,9 +40,9 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
 
 const CameraView: React.FC<CameraViewProps> = (props) => {
   const {
-    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled, isFlipped, portraitMode, timerSeconds,
-    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled, setPortraitMode, setTimerSeconds,
-    onCapture, onSwitchCamera, onFlipImage, onUploadOverlay
+    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode, flashEnabled, isFlipped, timerSeconds,
+    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom, setFlashEnabled, setTimerSeconds,
+    onCapture, onSwitchCamera, onUploadOverlay
   } = props;
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -193,31 +190,12 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         context.scale(-1, 1);
       }
       
-      // Apply portrait mode effects to captured image
-      if (portraitMode) {
-        context.filter = 'contrast(1.1) saturate(1.2)';
-      }
-      
       context.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
-      
-      // Add portrait mode vignette effect
-      if (portraitMode) {
-        const gradient = context.createRadialGradient(
-          drawWidth / 2, drawHeight / 2, Math.min(drawWidth, drawHeight) * 0.3,
-          drawWidth / 2, drawHeight / 2, Math.min(drawWidth, drawHeight) * 0.7
-        );
-        gradient.addColorStop(0, 'rgba(0,0,0,0)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
-        context.globalCompositeOperation = 'multiply';
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, drawWidth, drawHeight);
-        context.globalCompositeOperation = 'source-over';
-      }
       
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       onCapture(dataUrl);
     }
-  }, [aspectRatio, onCapture, isFlipped, portraitMode]);
+  }, [aspectRatio, onCapture, isFlipped]);
 
   const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
     if (!overlayImage) return;
@@ -377,13 +355,6 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
              }}>
           {isLoading && <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-30"><p>Starting Camera...</p></div>}
           {cameraError && <div className="absolute inset-0 bg-red-900 flex items-center justify-center z-30 p-4 text-center"><p>{cameraError}</p></div>}
-          
-          {/* Portrait mode indicator */}
-          {portraitMode && (
-            <div className="absolute top-4 left-4 z-20 bg-purple-600 px-3 py-1 rounded-full">
-              <span className="text-xs font-medium text-white">PORTRAIT</span>
-            </div>
-          )}
 
           {/* Timer indicator */}
           {timerSeconds > 0 && !countdownActive && (
@@ -415,21 +386,9 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             playsInline 
             className="absolute top-0 left-0 w-full h-full object-cover" 
             style={{
-              transform: `scale(${isFlipped ? -1 : 1}, 1)`,
-              filter: portraitMode ? 'blur(0px) contrast(1.1) saturate(1.2)' : 'none'
-            }} 
+              transform: `scaleX(${isFlipped ? -1 : 1})`
+            }}
           />
-          
-          {/* Portrait mode overlay effect */}
-          {portraitMode && (
-            <div 
-              className="absolute inset-0 pointer-events-none z-5"
-              style={{
-                background: `radial-gradient(ellipse 40% 60% at center, transparent 30%, rgba(0,0,0,0.3) 70%)`,
-                mixBlendMode: 'multiply'
-              }}
-            />
-          )}
           
           {overlayImage && (
             <img 
@@ -530,13 +489,6 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
               <Icon name="flash" className="w-4 h-4"/>
             </button>
             <button 
-              onClick={() => setPortraitMode(!portraitMode)} 
-              className={`p-2 rounded-xl transition-all duration-300 shadow-md ${portraitMode ? 'bg-gradient-to-r from-purple-500 to-violet-500 shadow-purple-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-purple-600 hover:to-violet-600'}`}
-              title="Portrait Mode"
-            >
-              <Icon name="portrait" className="w-4 h-4"/>
-            </button>
-            <button 
               onClick={cycleTimer} 
               className={`p-2 rounded-xl transition-all duration-300 shadow-md ${timerSeconds > 0 ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-orange-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 hover:from-orange-600 hover:to-red-600'}`}
               title={`Timer: ${timerSeconds === 0 ? 'Off' : `${timerSeconds}s`}`}
@@ -556,8 +508,8 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         </div>
         
         {/* Capture Controls - Elegant */}
-        <div className="flex justify-around items-center py-3 bg-gradient-to-r from-blue-950/50 via-indigo-950/60 to-blue-950/50 rounded-xl border border-blue-300/20 shadow-xl">
-          <div className="flex flex-col items-center">
+        <div className="flex justify-center items-center py-3 bg-gradient-to-r from-blue-950/50 via-indigo-950/60 to-blue-950/50 rounded-xl border border-blue-300/20 shadow-xl">
+          <div className="flex flex-col items-center mr-8">
             <button onClick={onSwitchCamera} className="w-14 h-14 flex items-center justify-center group" title="Switch Camera">
               <div className="p-2.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-600 group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-300 shadow-lg group-active:scale-95">
                <Icon name="switchCamera" className="w-5 h-5"/>
@@ -578,13 +530,8 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
             </div>
           </button>
           
-          <div className="flex flex-col items-center">
-            <button onClick={onFlipImage} className="w-14 h-14 flex items-center justify-center group" title="Flip Image">
-              <div className={`p-2.5 rounded-xl transition-all duration-300 shadow-lg group-active:scale-95 ${isFlipped ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow-blue-400/30' : 'bg-gradient-to-r from-slate-700 to-slate-600 group-hover:from-blue-600 group-hover:to-indigo-600'}`}>
-               <Icon name="mirror" className="w-5 h-5"/>
-              </div>
-            </button>
-            <span className="text-xs text-blue-200 mt-1 font-medium">Mirror</span>
+          <div className="w-14 ml-8">
+            {/* Spacer for symmetry */}
           </div>
         </div>
       </footer>

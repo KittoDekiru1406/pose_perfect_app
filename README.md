@@ -18,8 +18,6 @@ A modern, elegant camera web application with advanced pose matching capabilitie
 - **Real-time pose alignment** for perfect shot composition
 
 ### 🎨 **Professional Effects**
-- **Portrait mode** with depth-of-field blur effects
-- **Image mirroring** for selfie mode
 - **Timer countdown** (3s, 5s, 10s) for hands-free capture
 - **Real-time preview** with live adjustments
 
