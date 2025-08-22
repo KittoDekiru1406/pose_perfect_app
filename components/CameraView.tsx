@@ -50,6 +50,8 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const [zoomCaps, setZoomCaps] = useState<{min: number, max: number, step: number} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{x: number, y: number}>({x: 0, y: 0});
+  const [lastTouchDistance, setLastTouchDistance] = useState<number>(0);
+  const [isZooming, setIsZooming] = useState(false);
 
   useEffect(() => {
     let currentStream: MediaStream;
@@ -173,12 +175,25 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const handleOverlayTouchStart = useCallback((e: React.TouchEvent) => {
     if (!overlayImage) return;
     e.preventDefault();
-    const touch = e.touches[0];
-    setIsDragging(true);
-    setDragStart({
-      x: touch.clientX - overlayPosition.x,
-      y: touch.clientY - overlayPosition.y
-    });
+    
+    if (e.touches.length === 1) {
+      // Single touch - start dragging
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({
+        x: touch.clientX - overlayPosition.x,
+        y: touch.clientY - overlayPosition.y
+      });
+    } else if (e.touches.length === 2) {
+      // Two touches - start zooming
+      setIsZooming(true);
+      setIsDragging(false);
+      const distance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setLastTouchDistance(distance);
+    }
   }, [overlayImage, overlayPosition]);
 
   const handleOverlayMove = useCallback((clientX: number, clientY: number) => {
@@ -194,21 +209,40 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   }, [handleOverlayMove]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (e.touches.length > 0) {
+    if (!overlayImage) return;
+    
+    if (e.touches.length === 1 && isDragging) {
+      // Single touch - dragging
       const touch = e.touches[0];
       handleOverlayMove(touch.clientX, touch.clientY);
+    } else if (e.touches.length === 2 && isZooming) {
+      // Two touches - zooming
+      e.preventDefault();
+      const distance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      
+      if (lastTouchDistance > 0) {
+        const scale = distance / lastTouchDistance;
+        const newZoom = Math.max(0.5, Math.min(3, overlayZoom * scale));
+        setOverlayZoom(newZoom);
+      }
+      setLastTouchDistance(distance);
     }
-  }, [handleOverlayMove]);
+  }, [overlayImage, isDragging, isZooming, handleOverlayMove, lastTouchDistance, overlayZoom, setOverlayZoom]);
 
   const handleOverlayEnd = useCallback(() => {
     setIsDragging(false);
+    setIsZooming(false);
+    setLastTouchDistance(0);
   }, []);
 
   useEffect(() => {
-    if (isDragging) {
+    if (isDragging || isZooming) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleOverlayEnd);
-      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
       document.addEventListener('touchend', handleOverlayEnd);
       
       return () => {
@@ -218,12 +252,21 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
         document.removeEventListener('touchend', handleOverlayEnd);
       };
     }
-  }, [isDragging, handleMouseMove, handleTouchMove, handleOverlayEnd]);
+  }, [isDragging, isZooming, handleMouseMove, handleTouchMove, handleOverlayEnd]);
 
   const resetOverlayTransform = useCallback(() => {
     setOverlayZoom(1);
     setOverlayPosition({x: 0, y: 0});
   }, [setOverlayZoom, setOverlayPosition]);
+
+  const handleOverlayWheel = useCallback((e: React.WheelEvent) => {
+    if (!overlayImage) return;
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newZoom = Math.max(0.5, Math.min(3, overlayZoom + delta));
+    setOverlayZoom(newZoom);
+  }, [overlayImage, overlayZoom, setOverlayZoom]);
   
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col overflow-hidden">
@@ -246,6 +289,7 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
               }}
               onMouseDown={handleOverlayMouseDown}
               onTouchStart={handleOverlayTouchStart}
+              onWheel={handleOverlayWheel}
               draggable={false}
             />
           )}
@@ -266,6 +310,9 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
           <div className="space-y-3">
             <div className="text-center">
               <span className="text-sm font-medium text-white">Overlay Controls</span>
+              <p className="text-xs text-gray-300 mt-1">
+                💡 Drag to move • Scroll wheel or pinch to zoom
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-3">
               <div className="flex items-center gap-2">
