@@ -10,11 +10,15 @@ import Icon from './Icon';
 interface CameraViewProps {
   overlayImage: string | null;
   overlayOpacity: number;
+  overlayZoom: number;
+  overlayPosition: {x: number, y: number};
   showGrid: boolean;
   aspectRatio: AspectRatio;
   zoom: number;
   facingMode: 'user' | 'environment';
   setOverlayOpacity: (opacity: number) => void;
+  setOverlayZoom: (zoom: number) => void;
+  setOverlayPosition: (position: {x: number, y: number}) => void;
   setShowGrid: (show: boolean) => void;
   setAspectRatio: (ratio: AspectRatio) => void;
   setZoom: (zoom: number) => void;
@@ -31,8 +35,8 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
 
 const CameraView: React.FC<CameraViewProps> = (props) => {
   const {
-    overlayImage, overlayOpacity, showGrid, aspectRatio, zoom, facingMode,
-    setOverlayOpacity, setShowGrid, setAspectRatio, setZoom,
+    overlayImage, overlayOpacity, overlayZoom, overlayPosition, showGrid, aspectRatio, zoom, facingMode,
+    setOverlayOpacity, setOverlayZoom, setOverlayPosition, setShowGrid, setAspectRatio, setZoom,
     onCapture, onFlipCamera, onUploadOverlay
   } = props;
 
@@ -44,6 +48,8 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
   const [isLoading, setIsLoading] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoomCaps, setZoomCaps] = useState<{min: number, max: number, step: number} | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{x: number, y: number}>({x: 0, y: 0});
 
   useEffect(() => {
     let currentStream: MediaStream;
@@ -153,6 +159,71 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
       onCapture(dataUrl);
     }
   }, [aspectRatio, onCapture, facingMode]);
+
+  const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!overlayImage) return;
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX - overlayPosition.x,
+      y: e.clientY - overlayPosition.y
+    });
+  }, [overlayImage, overlayPosition]);
+
+  const handleOverlayTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!overlayImage) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({
+      x: touch.clientX - overlayPosition.x,
+      y: touch.clientY - overlayPosition.y
+    });
+  }, [overlayImage, overlayPosition]);
+
+  const handleOverlayMove = useCallback((clientX: number, clientY: number) => {
+    if (!isDragging) return;
+    setOverlayPosition({
+      x: clientX - dragStart.x,
+      y: clientY - dragStart.y
+    });
+  }, [isDragging, dragStart, setOverlayPosition]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    handleOverlayMove(e.clientX, e.clientY);
+  }, [handleOverlayMove]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (e.touches.length > 0) {
+      const touch = e.touches[0];
+      handleOverlayMove(touch.clientX, touch.clientY);
+    }
+  }, [handleOverlayMove]);
+
+  const handleOverlayEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleOverlayEnd);
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchend', handleOverlayEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleOverlayEnd);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleOverlayEnd);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleTouchMove, handleOverlayEnd]);
+
+  const resetOverlayTransform = useCallback(() => {
+    setOverlayZoom(1);
+    setOverlayPosition({x: 0, y: 0});
+  }, [setOverlayZoom, setOverlayPosition]);
   
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col overflow-hidden">
@@ -163,7 +234,21 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
           
           <video ref={videoRef} autoPlay playsInline className="absolute top-0 left-0 w-full h-full object-cover" style={{transform: `scale(${facingMode === 'user' ? -1 : 1}, 1)`}} />
           
-          {overlayImage && <img src={overlayImage} alt="Pose overlay" className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none z-10 transition-opacity" style={{ opacity: overlayOpacity }} />}
+          {overlayImage && (
+            <img 
+              src={overlayImage} 
+              alt="Pose overlay" 
+              className="absolute top-0 left-0 w-full h-full object-contain cursor-move z-10 transition-opacity select-none" 
+              style={{ 
+                opacity: overlayOpacity,
+                transform: `translate(${overlayPosition.x}px, ${overlayPosition.y}px) scale(${overlayZoom})`,
+                transformOrigin: 'center center'
+              }}
+              onMouseDown={handleOverlayMouseDown}
+              onTouchStart={handleOverlayTouchStart}
+              draggable={false}
+            />
+          )}
           
           {showGrid && (
             <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none z-20">
@@ -177,18 +262,65 @@ const CameraView: React.FC<CameraViewProps> = (props) => {
       </main>
 
       <footer className="w-full bg-black bg-opacity-30 p-4 space-y-4">
-        { (overlayImage || zoomCaps) &&
-            <div className="flex gap-4 items-center justify-center">
-                {overlayImage && <div className="flex-1 flex items-center gap-2">
-                <span className="text-xs">Opacity</span>
-                <input type="range" min="0" max="1" step="0.05" value={overlayOpacity} onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
-                </div>}
-                {zoomCaps && <div className="flex-1 flex items-center gap-2">
-                <span className="text-xs">Zoom</span>
-                <input type="range" min={zoomCaps.min} max={zoomCaps.max} step={zoomCaps.step} value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
-                </div>}
+        {overlayImage && (
+          <div className="space-y-3">
+            <div className="text-center">
+              <span className="text-sm font-medium text-white">Overlay Controls</span>
             </div>
-        }
+            <div className="grid grid-cols-1 gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs w-16">Opacity</span>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.05" 
+                  value={overlayOpacity} 
+                  onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} 
+                  className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
+                />
+                <span className="text-xs w-10 text-right">{Math.round(overlayOpacity * 100)}%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs w-16">Zoom</span>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="3" 
+                  step="0.1" 
+                  value={overlayZoom} 
+                  onChange={(e) => setOverlayZoom(parseFloat(e.target.value))} 
+                  className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
+                />
+                <span className="text-xs w-10 text-right">{overlayZoom.toFixed(1)}x</span>
+              </div>
+              <div className="flex justify-center">
+                <button 
+                  onClick={resetOverlayTransform}
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-xs transition-colors"
+                >
+                  Reset Position & Zoom
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {zoomCaps && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs w-16">Camera</span>
+            <input 
+              type="range" 
+              min={zoomCaps.min} 
+              max={zoomCaps.max} 
+              step={zoomCaps.step} 
+              value={zoom} 
+              onChange={(e) => setZoom(parseFloat(e.target.value))} 
+              className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer" 
+            />
+            <span className="text-xs w-10 text-right">{zoom.toFixed(1)}x</span>
+          </div>
+        )}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <button onClick={() => setShowGrid(!showGrid)} className={`p-2 rounded-full transition-colors ${showGrid ? 'bg-blue-500' : 'bg-gray-800'}`}>

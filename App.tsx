@@ -6,6 +6,8 @@ import PreviewModal from './components/PreviewModal';
 const App: React.FC = () => {
   const [overlayImage, setOverlayImage] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.3);
+  const [overlayZoom, setOverlayZoom] = useState<number>(1);
+  const [overlayPosition, setOverlayPosition] = useState<{x: number, y: number}>({x: 0, y: 0});
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
   const [zoom, setZoom] = useState<number>(1);
@@ -18,6 +20,9 @@ const App: React.FC = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         setOverlayImage(e.target?.result as string);
+        // Reset overlay transformations when new image is uploaded
+        setOverlayZoom(1);
+        setOverlayPosition({x: 0, y: 0});
       };
       reader.readAsDataURL(file);
     }
@@ -84,11 +89,15 @@ const App: React.FC = () => {
     <CameraView
       overlayImage={overlayImage}
       overlayOpacity={overlayOpacity}
+      overlayZoom={overlayZoom}
+      overlayPosition={overlayPosition}
       showGrid={showGrid}
       aspectRatio={aspectRatio}
       zoom={zoom}
       facingMode={facingMode}
       setOverlayOpacity={setOverlayOpacity}
+      setOverlayZoom={setOverlayZoom}
+      setOverlayPosition={setOverlayPosition}
       setShowGrid={setShowGrid}
       setAspectRatio={setAspectRatio}
       setZoom={setZoom}
